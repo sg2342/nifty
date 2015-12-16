@@ -13,6 +13,8 @@
 	 restart/0,
 	 call_remote/3]).
 
+-export([slave_server/1]).
+
 
 %% @doc Starts remote node to safely call NIFs
 -spec start() -> ok.
@@ -24,17 +26,22 @@ start() ->
 	{ok, Pid} ->
 	    Pid;
 	{error, {already_started, Pid}} ->
+	    Pid;
+	{error, {{already_started, Pid}, _}} ->
 	    Pid
     end,
     case slave:start_link(Host, slavename()) of
 	{ok, Node} ->
-	    SlavePid = spawn(Node, fun slave_server/0),
-	    SlavePid ! {self(), code:get_path()},
+	    lists:foreach(fun (Path) ->
+				  rpc:call(Node, code, add_patha, [Path])
+			  end, code:get_path()),
+	    SlavePid = spawn(Node, ?MODULE, slave_server, [self()]),
 	    undefined = put(slave_pid, SlavePid),
 	    ok;
 	{error, {already_running, _}} ->
 	    ok
     end.
+
 
 %% @doc Stops remote node
 -spec stop() -> ok.
@@ -57,15 +64,8 @@ restart() ->
     stop(),
     start().
 
-slave_server() ->
-    receive
-	stop ->
-	    ok;
-	{P, Paths} ->
-	    lists:foreach(fun code:add_patha/1, Paths),
-	    slave_server(P)
-    end.
-
+%% @internal
+-spec slave_server(pid()) -> ok.
 slave_server(P) ->
     receive
 	stop ->
