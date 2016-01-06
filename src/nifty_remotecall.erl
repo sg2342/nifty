@@ -55,8 +55,13 @@ stop() ->
 	false ->
 	    ok
     end,
-    _ = net_kernel:stop(), %% after this call the kernel is not running
-    ok.
+    case nodes() of
+	[] ->
+	    _ = net_kernel:stop(),
+	    ok;
+	_ ->
+	    ok
+    end.
 
 %% @doc Restarts remote node, useful for testing (side-effects are reset)
 -spec restart() -> ok.
